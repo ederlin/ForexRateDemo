@@ -13,6 +13,8 @@ public interface ForexRateRepository extends MongoRepository<ForexRatesPo, Strin
 
   Optional<ForexRatesPo> findByDateTime(LocalDateTime dateTime);
 
+  boolean existsByDateTime(LocalDateTime dateTime);
+
   List<ForexRatesPo> findByDateTimeBetweenAndQuoteCurrency(LocalDate startDate, LocalDate endDate, String currency);
 
 

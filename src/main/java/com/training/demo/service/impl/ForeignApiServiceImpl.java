@@ -3,47 +3,46 @@ package com.training.demo.service.impl;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.training.demo.constant.OpenAPIConst;
+import com.training.demo.mapper.DailyForexRatesMapper;
 import com.training.demo.model.dto.DailyForexRatesDto;
 import com.training.demo.service.ForeignApiService;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestTemplate;
 
 @Slf4j
 @RequiredArgsConstructor
 @Service
 public class ForeignApiServiceImpl implements ForeignApiService {
 
+  @Value("${open.api.daily.foreign.exchange.rates}")
+  private String foreignExchangeRatesUrl;
+
   private final RestTemplate restTemplate;
+  private final DailyForexRatesMapper dailyForexRatesMapper ;
 
   @Override
   public List<DailyForexRatesDto> fetchDailyForexRates() {
-    ObjectMapper mapper = new ObjectMapper();
-    List<DailyForexRatesDto> filteredList = new ArrayList<>();
+    List<DailyForexRatesDto> dailyForexRatesDtoList = new ArrayList<>();
 
     try {
       //  取得每日外幣匯率
-      String jsonString = restTemplate
-          .getForObject(OpenAPIConst.API_BASE_URL + OpenAPIConst.DAILY_FOREIGN_EXCHANGE_RATES, String.class);
+      String jsonString = restTemplate.getForObject(foreignExchangeRatesUrl, String.class);
       log.info("DailyForeignExchangeRates jsonString: {} " , jsonString);
-      List<Map<String, String>> dtos = mapper.readValue(jsonString, new TypeReference<>() {});
 
-      // 篩選出USD/NTD
-      for (Map<String, String> dto : dtos) {
-        DailyForexRatesDto filteredDto = new DailyForexRatesDto();
-        filteredDto.setDate(dto.get("Date"));
-        filteredDto.setUsdToNtd(dto.get("USD/NTD"));
-        filteredList.add(filteredDto);
-      }
+      ObjectMapper mapper = new ObjectMapper();
+      List<Map<String, String>> dtos = mapper.readValue(jsonString, new TypeReference<>() {});
+      dailyForexRatesDtoList = dailyForexRatesMapper.jsonMapListToDtoList(dtos);
     } catch (Exception e) {
       log.error("fetchDailyForexRates error: {} " , e.getMessage(), e);
     }
-    return filteredList;
+    return dailyForexRatesDtoList;
   }
 
 }

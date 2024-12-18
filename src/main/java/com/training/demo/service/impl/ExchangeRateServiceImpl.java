@@ -1,6 +1,7 @@
 package com.training.demo.service.impl;
 
 import com.training.demo.enums.ReturnCodeConst;
+import com.training.demo.mapper.DailyForexRatesMapper;
 import com.training.demo.model.dto.DailyForexRatesDto;
 import com.training.demo.model.entity.ForexRatesPo;
 import com.training.demo.model.request.ForexRequest;
@@ -14,12 +15,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
-import java.util.stream.Collectors;
 
 @Slf4j
 @RequiredArgsConstructor
@@ -28,31 +26,30 @@ public class ExchangeRateServiceImpl  implements ExchangeRateService {
 
   private final ForexRateRepository forexRateRepository;
 
+  private final DailyForexRatesMapper dailyForexRatesMapper;
+
   /**
    * 將每日的美元/台幣欄位(USD/NTD)資料與日期(yyyy-MM-dd HH:mm:ss)儲存至DB
    * @param dtos
    */
   @Override
   public void saveDailyUsdToNtd(List<DailyForexRatesDto> dtos) {
-      List<ForexRatesPo>  forexRatesList = dtos
-          .stream()
-          .map(this::convertDailyForexRatesDtoToForexRates)
-          .collect(Collectors.toList());
+    List<ForexRatesPo> forexRatesList = dailyForexRatesMapper.dtoListListToPoList(dtos);
 
     // 先判斷第一筆資料在資料庫是否存在
-     Optional<ForexRatesPo> firstData = forexRateRepository.findByDateTime(forexRatesList.get(0).getDateTime());
-     if(!firstData.isPresent()) {
-        // 第一次存 DB
-        forexRateRepository.saveAll(forexRatesList);
-       log.info("------ first save end ------");
-     } else {
-        // 判斷最後一筆資料在資料庫是否存在，碰到假日資料不會更新
-       Optional<ForexRatesPo> lastData = forexRateRepository.findByDateTime(forexRatesList.get(forexRatesList.size() - 1).getDateTime());
-       if(!lastData.isPresent()) {
-         forexRateRepository.save(forexRatesList.get(forexRatesList.size() - 1));
-         log.info("------ daily save end ------");
-       }
-     }
+    boolean isFirstDataExist = forexRateRepository.existsByDateTime(forexRatesList.get(0).getDateTime());
+    if(isFirstDataExist) {
+      // 判斷最後一筆資料在資料庫是否存在，碰到假日資料不會更新
+      boolean isLastExist = forexRateRepository.existsByDateTime(forexRatesList.get(forexRatesList.size() - 1).getDateTime());
+      if(!isLastExist) {
+        forexRateRepository.save(forexRatesList.get(forexRatesList.size() - 1));
+        log.info("------ daily save end ------");
+      }
+    }else {
+      // 第一次存 DB
+      forexRateRepository.saveAll(forexRatesList);
+      log.info("------ first save end ------");
+    }
   }
 
   /**
@@ -95,25 +92,10 @@ public class ExchangeRateServiceImpl  implements ExchangeRateService {
     return res;
   }
 
-  public ForexRatesPo convertDailyForexRatesDtoToForexRates(DailyForexRatesDto dto) {
-    return ForexRatesPo.builder()
-        .dateTime(covertStringToLocalDateTime(dto.getDate()).plusHours(8)) // 存 MongoDB 會將其轉換為 UTC 時間，所以加 8 小時
-        .baseCurrency("NTD")
-        .quoteCurrency("USD")
-        .rates(Double.parseDouble(dto.getUsdToNtd()))
-        .build();
-  }
-
   public boolean isValidDateRange(LocalDate startDate, LocalDate endDate) {
     LocalDate oneYearAgo = LocalDate.now().minusYears(1);
     LocalDate yesterday = LocalDate.now().minusDays(1);
     return !startDate.isBefore(oneYearAgo) && !endDate.isAfter(yesterday) && !startDate.isAfter(endDate);
-  }
-
-  private LocalDateTime covertStringToLocalDateTime(String sDateTime) {
-    DateTimeFormatter inputFormatter = DateTimeFormatter.ofPattern("yyyyMMdd");
-    LocalDate parsedDate = LocalDate.parse(sDateTime, inputFormatter);
-    return parsedDate.atStartOfDay();
   }
 
 }
